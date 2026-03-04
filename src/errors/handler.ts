@@ -1,6 +1,7 @@
 /**
- * Central error handler.
- * Classifies errors and wraps them with context.
+ * Central error classifier.
+ * Classifies errors by type and wraps them with context for API responses.
+ * All error types map to specific HTTP status codes and machine-readable codes.
  */
 export function classifyError(error: unknown, source: string): AppError {
   if (error instanceof NotFoundError) {
@@ -9,15 +10,20 @@ export function classifyError(error: unknown, source: string): AppError {
   if (error instanceof AuthError) {
     return new AppError('UNAUTHORIZED', error.message, source, 401);
   }
-  if (error instanceof RateLimitError) {
-    return new AppError('RATE_LIMITED', error.message, source, 429, {
-      retryAfter: error.retryAfter,
+  if (error instanceof ForbiddenError) {
+    return new AppError('FORBIDDEN', error.message, source, 403, {
+      requiredPermission: error.requiredPermission,
+    });
+  }
+  if (error instanceof ConflictError) {
+    return new AppError('CONFLICT', error.message, source, 409, {
+      conflictField: error.field,
     });
   }
   if (error instanceof ValidationError) {
     return new AppError('VALIDATION', error.message, source, 400);
   }
-  // Unknown errors get a generic 500
+  // Unknown errors get a generic 500 with sanitized message
   return new AppError('INTERNAL', 'An unexpected error occurred', source, 500);
 }
 
@@ -35,8 +41,13 @@ export class AppError extends Error {
 
 export class NotFoundError extends Error {}
 export class AuthError extends Error {}
-export class RateLimitError extends Error {
-  constructor(message: string, public retryAfter: number) {
+export class ForbiddenError extends Error {
+  constructor(message: string, public requiredPermission?: string) {
+    super(message);
+  }
+}
+export class ConflictError extends Error {
+  constructor(message: string, public field?: string) {
     super(message);
   }
 }
