@@ -1,15 +1,19 @@
-import { classifyError, ValidationError } from '../errors/handler';
+import { categorizeError, ValidationError } from '../errors/handler';
 import { requireJWT } from '../auth/jwt-auth';
-import { requirePermission } from '../auth/permissions';
+import { requirePermission } from '../auth/rbac';
 
 interface User {
   id: string;
   name: string;
   email: string;
+  displayName: string;
+  avatarUrl?: string;
   role: 'admin' | 'member' | 'viewer';
   permissions: string[];
+  status: 'active' | 'suspended' | 'pending';
   lastLoginAt?: Date;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 interface PaginatedResponse<T> {
@@ -36,7 +40,7 @@ export async function listUsers(
     const total = await db.count('users');
     return { data: users, total, page, pageSize };
   } catch (error) {
-    throw classifyError(error, 'listUsers');
+    throw categorizeError(error, 'listUsers');
   }
 }
 
@@ -53,7 +57,7 @@ export async function getUser(req: Request, id: string): Promise<User> {
     if (!user) throw new NotFoundError(`User ${id} not found`);
     return user;
   } catch (error) {
-    throw classifyError(error, 'getUser');
+    throw categorizeError(error, 'getUser');
   }
 }
 
@@ -69,13 +73,16 @@ export async function createUser(req: Request, data: Partial<User>): Promise<Use
     if (!data.name) throw new ValidationError('Name is required');
     const user = await db.insert('users', {
       ...data,
-      role: data.role ?? 'viewer',
+      displayName: data.displayName ?? data.name,
+      role: data.role ?? 'member',
       permissions: data.permissions ?? [],
+      status: 'pending',
       createdAt: new Date(),
+      updatedAt: new Date(),
     });
     return user;
   } catch (error) {
-    throw classifyError(error, 'createUser');
+    throw categorizeError(error, 'createUser');
   }
 }
 
@@ -87,7 +94,7 @@ export async function createUser(req: Request, data: Partial<User>): Promise<Use
 export async function updateUser(
   req: Request,
   id: string,
-  data: Partial<Pick<User, 'name' | 'email'>>,
+  data: Partial<Pick<User, 'name' | 'email' | 'displayName' | 'avatarUrl'>>,
 ): Promise<User> {
   const caller = requireJWT(req);
   if (caller.userId !== id) {
@@ -99,6 +106,28 @@ export async function updateUser(
     if (!user) throw new NotFoundError(`User ${id} not found`);
     return user;
   } catch (error) {
-    throw classifyError(error, 'updateUser');
+    throw categorizeError(error, 'updateUser');
+  }
+}
+
+/**
+ * DELETE /api/users/:id
+ * Soft-deletes a user by setting status to 'suspended'.
+ * Requires 'users:delete' permission. Cannot delete self.
+ */
+export async function deleteUser(req: Request, id: string): Promise<void> {
+  const caller = requireJWT(req, 'admin');
+  requirePermission(req, 'users:delete');
+  try {
+    if (caller.userId === id) {
+      throw new ValidationError('Cannot delete your own account');
+    }
+    const user = await db.update('users', id, {
+      status: 'suspended',
+      updatedAt: new Date(),
+    });
+    if (!user) throw new NotFoundError(`User ${id} not found`);
+  } catch (error) {
+    throw categorizeError(error, 'deleteUser');
   }
 }

@@ -1,22 +1,50 @@
-import { classifyError } from '../errors/handler';
+import { categorizeError } from '../errors/handler';
 import { requireJWT } from '../auth/jwt-auth';
-import { requirePermission } from '../auth/permissions';
-import { logAuditEvent, getAuditLog } from '../audit/logger';
+import { requirePermission } from '../auth/rbac';
 
 /**
  * GET /api/admin/users
- * List all users with role details. Admin only.
+ * List all users with role details and status. Admin only.
+ * Supports pagination via ?page=N&pageSize=N query params.
  */
-export async function adminListUsers(req: Request): Promise<AdminUserView[]> {
+export async function adminListUsers(
+  req: Request,
+  page: number = 1,
+  pageSize: number = 50,
+): Promise<PaginatedAdminView> {
   const caller = requireJWT(req, 'admin');
   requirePermission(req, 'admin:access');
   try {
-    const users = await db.query('SELECT * FROM users');
-    logAuditEvent(caller.userId, 'admin:list_users', 'users', {}, 'success', getIP(req));
-    return users.map(u => ({ ...u, lastLoginAt: u.lastLoginAt, permissions: u.permissions }));
+    const offset = (page - 1) * pageSize;
+    const users = await db.query('SELECT * FROM users LIMIT ? OFFSET ?', [pageSize, offset]);
+    const total = await db.count('users');
+    console.log(JSON.stringify({
+      event: 'admin:list_users',
+      actor: caller.userId,
+      outcome: 'success',
+      ip: getIP(req),
+      timestamp: new Date().toISOString(),
+    }));
+    return {
+      data: users.map(u => ({
+        ...u,
+        lastLoginAt: u.lastLoginAt,
+        permissions: u.permissions,
+        status: u.status,
+      })),
+      total,
+      page,
+      pageSize,
+    };
   } catch (error) {
-    logAuditEvent(caller.userId, 'admin:list_users', 'users', {}, 'failure', getIP(req));
-    throw classifyError(error, 'adminListUsers');
+    console.log(JSON.stringify({
+      event: 'admin:list_users',
+      actor: caller.userId,
+      outcome: 'failure',
+      ip: getIP(req),
+      timestamp: new Date().toISOString(),
+    }));
+    throw categorizeError(error, 'adminListUsers');
   }
 }
 
@@ -32,38 +60,66 @@ export async function updateUserRole(
   const caller = requireJWT(req, 'admin');
   requirePermission(req, 'users:write');
   try {
-    await db.update('users', userId, { role: newRole });
-    logAuditEvent(
-      caller.userId,
-      'admin:update_role',
-      `user:${userId}`,
-      { newRole },
-      'success',
-      getIP(req),
-    );
+    await db.update('users', userId, { role: newRole, updatedAt: new Date() });
+    console.log(JSON.stringify({
+      event: 'admin:update_role',
+      actor: caller.userId,
+      target: `user:${userId}`,
+      details: { newRole },
+      outcome: 'success',
+      ip: getIP(req),
+      timestamp: new Date().toISOString(),
+    }));
   } catch (error) {
-    logAuditEvent(caller.userId, 'admin:update_role', `user:${userId}`, { newRole }, 'failure', getIP(req));
-    throw classifyError(error, 'updateUserRole');
+    console.log(JSON.stringify({
+      event: 'admin:update_role',
+      actor: caller.userId,
+      target: `user:${userId}`,
+      details: { newRole },
+      outcome: 'failure',
+      ip: getIP(req),
+      timestamp: new Date().toISOString(),
+    }));
+    throw categorizeError(error, 'updateUserRole');
   }
 }
 
 /**
- * GET /api/admin/audit
- * Retrieve audit log entries. Admin only.
+ * PATCH /api/admin/users/:id/status
+ * Suspend or reactivate a user account. Admin only.
  */
-export async function getAuditEntries(req: Request): Promise<AuditEntry[]> {
-  requireJWT(req, 'admin');
-  requirePermission(req, 'audit:read');
-  const since = req.url.searchParams?.get('since');
-  const limit = parseInt(req.url.searchParams?.get('limit') ?? '50', 10);
-  return getAuditLog({
-    since: since ? new Date(since) : undefined,
-    limit,
-  });
+export async function updateUserStatus(
+  req: Request,
+  userId: string,
+  newStatus: 'active' | 'suspended',
+): Promise<void> {
+  const caller = requireJWT(req, 'admin');
+  requirePermission(req, 'users:write');
+  try {
+    await db.update('users', userId, { status: newStatus, updatedAt: new Date() });
+    console.log(JSON.stringify({
+      event: 'admin:update_status',
+      actor: caller.userId,
+      target: `user:${userId}`,
+      details: { newStatus },
+      outcome: 'success',
+      ip: getIP(req),
+      timestamp: new Date().toISOString(),
+    }));
+  } catch (error) {
+    throw categorizeError(error, 'updateUserStatus');
+  }
 }
 
 function getIP(req: Request): string {
   return req.headers.get('X-Forwarded-For') || 'unknown';
+}
+
+interface PaginatedAdminView {
+  data: AdminUserView[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 interface AdminUserView {
@@ -71,6 +127,7 @@ interface AdminUserView {
   name: string;
   email: string;
   role: string;
+  status: string;
   lastLoginAt?: Date;
   permissions: string[];
 }
