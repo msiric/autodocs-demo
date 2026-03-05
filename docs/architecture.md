@@ -49,15 +49,21 @@ Returns an array of User objects with fields: `id`, `name`, `email`, `role`.
 
 ## 2. Authentication
 
-All endpoints require authentication via Bearer token in the `Authorization` header.
+All endpoints require authentication via JWT Bearer token in the `Authorization` header (except `GET /api/health`).
 
-### 2.1 Token Validation
+### 2.1 JWT Authentication
 
-`src/auth/middleware.ts` → `requireAuth(req, requiredRole?)`
+`src/auth/jwt-auth.ts` → `requireJWT(req, requiredRole?)`
 
-1. Extract token from `Authorization: Bearer <token>` header
-2. Validate token against the token store
-3. If `requiredRole` is specified, check the session's role matches
+1. Extract JWT from `Authorization: Bearer <token>` header
+2. Verify and decode the JWT (access tokens expire after 15 minutes; refresh tokens after 7 days)
+3. If `requiredRole` is specified, check the token's role matches
+
+### 2.2 RBAC Permissions
+
+`src/auth/rbac.ts` → `requirePermission(req, permission)`
+
+Role hierarchy: `admin` > `moderator` > `member` > `viewer`. Each role inherits permissions from lower roles. Permissions include `users:read`, `users:write`, `users:delete`, `users:suspend`, `admin:access`.
 
 ### 2.2 Error Cases
 
@@ -71,7 +77,7 @@ All endpoints require authentication via Bearer token in the `Authorization` hea
 
 ## 3. Error Handling
 
-All errors are handled centrally by `handleError()` in `src/errors/handler.ts`.
+All errors are handled centrally by `categorizeError()` in `src/errors/handler.ts`.
 
 ### 3.1 Error Classification
 
@@ -79,15 +85,20 @@ All errors are handled centrally by `handleError()` in `src/errors/handler.ts`.
 |-----------|------|--------|-------------|
 | `NotFoundError` | `NOT_FOUND` | 404 | Resource not found |
 | `AuthError` | `UNAUTHORIZED` | 401 | Authentication failed |
+| `ForbiddenError` | `FORBIDDEN` | 403 | Insufficient permissions |
+| `ValidationError` | `VALIDATION` | 400 | Input validation failed (includes field-level violations) |
+| `RateLimitError` | `RATE_LIMITED` | 429 | Rate limit exceeded (includes `retryAfter` metadata) |
+| `ConflictError` | `CONFLICT` | 409 | Resource conflict |
 | Unknown | `INTERNAL` | 500 | Unexpected server error |
 
-### 3.2 AppError Structure
+### 3.2 ApiErrorEnvelope Structure
 
-All errors are wrapped in `AppError` with:
+All errors are returned as `ApiErrorEnvelope` with:
 - `code` — machine-readable error code
 - `message` — human-readable description
 - `source` — the function that threw the error
 - `statusCode` — HTTP status code
+- `metadata` — structured error context (e.g., `retryAfter` for rate limits, `violations` array for validation errors, `requiredPermission` for forbidden errors)
 
 ---
 
