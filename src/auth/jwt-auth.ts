@@ -80,7 +80,32 @@ export function refreshAccessToken(refreshToken: string): TokenPair {
   if (!payload) {
     throw new AuthError('Invalid or expired refresh token — re-authenticate');
   }
+  if (isTokenBlacklisted(refreshToken)) {
+    throw new AuthError('Token has been revoked — re-authenticate');
+  }
   return issueTokenPair(payload.userId, payload.role, payload.permissions);
+}
+
+/**
+ * Revoke a refresh token. Used on logout or password change.
+ * Blacklisted tokens cannot be used to obtain new access tokens.
+ */
+export function revokeToken(refreshToken: string): void {
+  tokenBlacklist.add(refreshToken);
+}
+
+/**
+ * Revoke all tokens for a user. Used on account compromise.
+ */
+export function revokeAllUserTokens(userId: string): void {
+  userRevocationTimestamps.set(userId, Math.floor(Date.now() / 1000));
+}
+
+const tokenBlacklist = new Set<string>();
+const userRevocationTimestamps = new Map<string, number>();
+
+function isTokenBlacklisted(token: string): boolean {
+  return tokenBlacklist.has(token);
 }
 
 function isRoleAuthorized(userRole: string, requiredRole: string): boolean {
