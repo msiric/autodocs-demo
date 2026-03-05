@@ -66,3 +66,26 @@ export function cleanupExpiredEntries(): void {
     }
   }
 }
+
+/**
+ * IP blocklist guard.
+ * Blocks requests from known-bad IPs. Loaded from config at startup.
+ */
+const blockedIPs = new Set<string>();
+
+export function blockIP(ip: string): void {
+  blockedIPs.add(ip);
+}
+
+export function unblockIP(ip: string): void {
+  blockedIPs.delete(ip);
+}
+
+export function requireNotBlocked(req: Request): void {
+  const ip = req.headers.get('X-Forwarded-For') || 'unknown';
+  if (blockedIPs.has(ip)) {
+    throw new ForbiddenError(`IP ${ip} is blocked`);
+  }
+}
+
+import { ForbiddenError } from '../errors/handler';

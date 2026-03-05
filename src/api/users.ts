@@ -1,6 +1,7 @@
 import { categorizeError, ValidationError } from '../errors/handler';
 import { requireJWT } from '../auth/jwt-auth';
 import { requirePermission } from '../auth/rbac';
+import { dispatchEvent } from '../webhooks/dispatcher';
 
 interface User {
   id: string;
@@ -16,11 +17,11 @@ interface User {
   updatedAt: Date;
 }
 
-interface PaginatedResponse<T> {
+interface CursorPaginatedResponse<T> {
   data: T[];
   total: number;
-  page: number;
-  pageSize: number;
+  cursor?: string;
+  hasMore: boolean;
 }
 
 /**
@@ -29,16 +30,27 @@ interface PaginatedResponse<T> {
  */
 export async function listUsers(
   req: Request,
-  page: number = 1,
-  pageSize: number = 20,
-): Promise<PaginatedResponse<User>> {
+  cursor?: string,
+  limit: number = 20,
+): Promise<CursorPaginatedResponse<User>> {
   requireJWT(req);
   requirePermission(req, 'users:read');
   try {
-    const offset = (page - 1) * pageSize;
-    const users = await db.query('SELECT * FROM users LIMIT ? OFFSET ?', [pageSize, offset]);
+    if (limit > 100) throw new ValidationError('Limit cannot exceed 100');
+    const query = cursor
+      ? 'SELECT * FROM users WHERE id > ? ORDER BY id LIMIT ?'
+      : 'SELECT * FROM users ORDER BY id LIMIT ?';
+    const params = cursor ? [cursor, limit + 1] : [limit + 1];
+    const users = await db.query(query, params);
+    const hasMore = users.length > limit;
+    const data = hasMore ? users.slice(0, limit) : users;
     const total = await db.count('users');
-    return { data: users, total, page, pageSize };
+    return {
+      data,
+      total,
+      cursor: hasMore ? data[data.length - 1].id : undefined,
+      hasMore,
+    };
   } catch (error) {
     throw categorizeError(error, 'listUsers');
   }
@@ -80,6 +92,7 @@ export async function createUser(req: Request, data: Partial<User>): Promise<Use
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    await dispatchEvent('user.created', { userId: user.id, role: user.role });
     return user;
   } catch (error) {
     throw categorizeError(error, 'createUser');
@@ -127,6 +140,7 @@ export async function deleteUser(req: Request, id: string): Promise<void> {
       updatedAt: new Date(),
     });
     if (!user) throw new NotFoundError(`User ${id} not found`);
+    await dispatchEvent('user.deleted', { userId: id });
   } catch (error) {
     throw categorizeError(error, 'deleteUser');
   }
