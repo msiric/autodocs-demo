@@ -18,6 +18,10 @@
 
 ## API Endpoints
 
+### 2026-03-05 — PR #7 by Mario Siric
+**Changed:** Added `GET /api/search?q=<query>` (full-text user search, requires `search:access`). Added `GET /api/status` (combined health + version + feature flags, public), replacing `GET /api/health` (deleted `src/api/health.ts`). `listUsers` migrated from offset-based to cursor-based pagination with response shape `{ data, total, cursor, hasMore }`. New files: `src/api/search.ts`, `src/api/status.ts`.
+**Why:** Comprehensive feature addition adding search capabilities, replacing the health endpoint with a richer status endpoint, and improving pagination for large datasets with cursor-based approach.
+
 ### 2026-03-05 — PR #5 by Mario Siric
 **Changed:** Added `GET /api/health` (health check, no auth), `DELETE /api/users/:id` (user deletion, `users:delete` permission), and `PATCH /api/admin/users/:id/status` (suspend/activate users, `users:write` permission). Removed `GET /api/admin/audit` endpoint. `adminListUsers` now accepts pagination parameters and returns `PaginatedAdminView`. `getAuditEntries` replaced by `updateUserStatus`. User objects now include `status` field.
 **Why:** API v2 overhaul expanded the endpoint surface for user lifecycle management (deletion, status changes) and added a health check endpoint. The dedicated audit log endpoint was removed as the audit subsystem was replaced with inline logging.
@@ -33,6 +37,10 @@
 ---
 
 ## Authentication
+
+### 2026-03-05 — PR #7 by Mario Siric
+**Changed:** Added token revocation (individual token and user-level revocation) to `src/auth/jwt-auth.ts`. Added `search:access` and `webhooks:manage` permissions to `src/auth/rbac.ts`. `src/middleware/rate-limiter.ts` renamed to `src/middleware/guards.ts`.
+**Why:** Token revocation was added to allow invalidating compromised or logged-out sessions. New permissions support the search API and webhook management features. The rate limiter middleware was renamed to guards to reflect its expanded scope.
 
 ### 2026-03-05 — PR #5 by Mario Siric
 **Changed:** `src/auth/permissions.ts` renamed to `src/auth/rbac.ts`. Added `moderator` role to the role hierarchy (admin > moderator > member > viewer) with `users:suspend` permission. Added `users:delete` permission. Rate limiting re-added at application layer via `src/middleware/rate-limiter.ts` (previously removed in PR #3).
