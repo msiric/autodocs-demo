@@ -35,6 +35,12 @@ export function categorizeError(error: unknown, source: string, requestId?: stri
       windowSeconds: error.windowSeconds,
     });
   }
+  if (error instanceof TenantError) {
+    return createEnvelope('TENANT_ERROR', error.message, source, 403, traceId, {
+      tenantId: error.tenantId,
+      limit: error.limit,
+    });
+  }
   // Unknown errors get a generic 500 with sanitized message
   return createEnvelope('INTERNAL', 'An unexpected error occurred', source, 500, traceId);
 }
@@ -103,6 +109,15 @@ export class RateLimitError extends Error {
     public retryAfter: number,
     public limit: number,
     public windowSeconds: number,
+  ) {
+    super(message);
+  }
+}
+export class TenantError extends Error {
+  constructor(
+    message: string,
+    public tenantId?: string,
+    public limit?: number,
   ) {
     super(message);
   }
