@@ -6,10 +6,9 @@ import { requireJWT } from './jwt-auth';
  * Maps roles to their allowed permissions.
  */
 export const ROLE_PERMISSIONS: Record<string, string[]> = {
-  admin: ['users:read', 'users:write', 'users:delete', 'users:suspend', 'admin:access', 'audit:read', 'search:access', 'webhooks:manage'],
-  moderator: ['users:read', 'users:write', 'users:suspend', 'search:access'],
-  member: ['users:read', 'users:write', 'search:access'],
-  viewer: ['users:read', 'search:access'],
+  admin: ['users:read', 'users:write', 'users:delete', 'users:suspend', 'admin:access', 'audit:read', 'search:access', 'webhooks:manage', 'tenant:admin', 'tenant:read'],
+  member: ['users:read', 'users:write', 'search:access', 'tenant:read'],
+  viewer: ['users:read', 'search:access', 'tenant:read'],
 };
 
 /**

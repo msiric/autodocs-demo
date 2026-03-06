@@ -2,6 +2,7 @@ import { AuthError, ForbiddenError } from '../errors/handler';
 
 interface JWTPayload {
   userId: string;
+  tenantId: string;
   role: 'admin' | 'member' | 'viewer';
   permissions: string[];
   exp: number;
@@ -53,17 +54,19 @@ export function requireJWT(req: Request, requiredRole?: string, requiredPermissi
 /**
  * Issue a new token pair (access + refresh).
  */
-export function issueTokenPair(userId: string, role: string, permissions: string[]): TokenPair {
+export function issueTokenPair(userId: string, tenantId: string, role: string, permissions: string[]): TokenPair {
   const now = Math.floor(Date.now() / 1000);
   const accessToken = signJWT({
     userId,
+    tenantId,
     role,
     permissions,
     iat: now,
-    exp: now + 900, // 15 minutes
+    exp: now + 1800, // 30 minutes
   });
   const refreshToken = signJWT({
     userId,
+    tenantId,
     role: 'refresh',
     permissions: [],
     iat: now,
@@ -83,7 +86,7 @@ export function refreshAccessToken(refreshToken: string): TokenPair {
   if (isTokenBlacklisted(refreshToken)) {
     throw new AuthError('Token has been revoked — re-authenticate');
   }
-  return issueTokenPair(payload.userId, payload.role, payload.permissions);
+  return issueTokenPair(payload.userId, payload.tenantId, payload.role, payload.permissions);
 }
 
 /**

@@ -1,10 +1,12 @@
-import { categorizeError, ValidationError } from '../errors/handler';
+import { categorizeError, ValidationError, TenantError } from '../errors/handler';
 import { requireJWT } from '../auth/jwt-auth';
 import { requirePermission } from '../auth/rbac';
 import { dispatchEvent } from '../webhooks/dispatcher';
+import { resolveTenant } from '../config/tenants';
 
 interface User {
   id: string;
+  tenantId: string;
   name: string;
   email: string;
   displayName: string;
@@ -33,14 +35,15 @@ export async function listUsers(
   cursor?: string,
   limit: number = 20,
 ): Promise<CursorPaginatedResponse<User>> {
-  requireJWT(req);
+  const caller = requireJWT(req);
   requirePermission(req, 'users:read');
+  const tenant = resolveTenant(caller);
   try {
     if (limit > 100) throw new ValidationError('Limit cannot exceed 100');
     const query = cursor
-      ? 'SELECT * FROM users WHERE id > ? ORDER BY id LIMIT ?'
-      : 'SELECT * FROM users ORDER BY id LIMIT ?';
-    const params = cursor ? [cursor, limit + 1] : [limit + 1];
+      ? 'SELECT * FROM users WHERE tenantId = ? AND id > ? ORDER BY id LIMIT ?'
+      : 'SELECT * FROM users WHERE tenantId = ? ORDER BY id LIMIT ?';
+    const params = cursor ? [tenant.id, cursor, limit + 1] : [tenant.id, limit + 1];
     const users = await db.query(query, params);
     const hasMore = users.length > limit;
     const data = hasMore ? users.slice(0, limit) : users;
@@ -78,21 +81,26 @@ export async function getUser(req: Request, id: string): Promise<User> {
  * Creates a new user. Requires 'users:write' permission.
  */
 export async function createUser(req: Request, data: Partial<User>): Promise<User> {
-  requireJWT(req, 'admin');
+  const caller = requireJWT(req, 'admin');
   requirePermission(req, 'users:write');
+  const tenant = resolveTenant(caller);
   try {
     if (!data.email) throw new ValidationError('Email is required');
     if (!data.name) throw new ValidationError('Name is required');
+    if (tenant.maxUsers && await db.count('users', { tenantId: tenant.id }) >= tenant.maxUsers) {
+      throw new TenantError(`Tenant ${tenant.id} has reached user limit (${tenant.maxUsers})`);
+    }
     const user = await db.insert('users', {
       ...data,
+      tenantId: tenant.id,
       displayName: data.displayName ?? data.name,
-      role: data.role ?? 'member',
+      role: data.role ?? 'viewer',
       permissions: data.permissions ?? [],
       status: 'pending',
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    await dispatchEvent('user.created', { userId: user.id, role: user.role });
+    await dispatchEvent('user.created', { userId: user.id, tenantId: tenant.id, role: user.role });
     return user;
   } catch (error) {
     throw categorizeError(error, 'createUser');

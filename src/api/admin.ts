@@ -1,6 +1,7 @@
 import { categorizeError } from '../errors/handler';
 import { requireJWT } from '../auth/jwt-auth';
 import { requirePermission } from '../auth/rbac';
+import { listTenants, getTenant } from '../config/tenants';
 
 /**
  * GET /api/admin/users
@@ -130,4 +131,44 @@ interface AdminUserView {
   status: string;
   lastLoginAt?: Date;
   permissions: string[];
+}
+
+/**
+ * GET /api/admin/tenants
+ * List all tenants. Requires tenant:admin permission.
+ */
+export async function adminListTenants(req: Request): Promise<TenantView[]> {
+  requireJWT(req, 'admin');
+  requirePermission(req, 'tenant:admin');
+  const tenants = listTenants();
+  return tenants.map(t => ({
+    id: t.id,
+    name: t.name,
+    maxUsers: t.maxUsers,
+    features: t.features,
+  }));
+}
+
+/**
+ * GET /api/admin/tenants/:id
+ * Get tenant details. Requires tenant:admin permission.
+ */
+export async function adminGetTenant(req: Request, tenantId: string): Promise<TenantView> {
+  requireJWT(req, 'admin');
+  requirePermission(req, 'tenant:admin');
+  const tenant = getTenant(tenantId);
+  if (!tenant) throw new Error(`Tenant ${tenantId} not found`);
+  return {
+    id: tenant.id,
+    name: tenant.name,
+    maxUsers: tenant.maxUsers,
+    features: tenant.features,
+  };
+}
+
+interface TenantView {
+  id: string;
+  name: string;
+  maxUsers: number;
+  features: { search: boolean; webhooks: boolean; advancedRbac: boolean };
 }
