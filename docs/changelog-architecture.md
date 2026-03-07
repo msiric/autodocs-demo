@@ -2,6 +2,10 @@
 
 ## Error Handling
 
+### 2026-03-07 — PR #9 by msiric
+**Changed:** Added `TenantError` class mapping to code `TENANT_ERROR` (HTTP 403) with `tenantId` and `limit` metadata.
+**Why:** Tenant user-limit enforcement needed a dedicated error type to distinguish tenant capacity issues from generic forbidden errors.
+
 ### 2026-03-05 — PR #5 by Mario Siric
 **Changed:** `classifyError()` renamed to `categorizeError()`. Return type changed from `AppError` to `ApiErrorEnvelope` (the `AppError` class was removed). `RateLimitError` (429) re-added with `retryAfter` metadata. `ValidationError` now includes a field-level `violations` array instead of a single message.
 **Why:** API v2 overhaul introduced structured error envelopes (`ApiErrorEnvelope`) for consistent client-side error handling. Rate limiting was re-added at the application layer (via `src/middleware/rate-limiter.ts`). Validation errors were enhanced with per-field violation details.
@@ -17,6 +21,10 @@
 ---
 
 ## API Endpoints
+
+### 2026-03-07 — PR #9 by msiric
+**Changed:** Added two tenant admin endpoints (`GET /api/admin/tenants`, `GET /api/admin/tenants/:id`). User listing is now tenant-scoped. Default role for new users changed from `member` to `viewer`. `search.ts` renamed to `queries.ts`. `status.ts` deleted.
+**Why:** Multi-tenant architecture with full data isolation. All user queries are now scoped by tenant. Tenant system includes resolution, registration, and feature flags. Default role changed to `viewer` for least-privilege defaults.
 
 ### 2026-03-05 — PR #5 by Mario Siric
 **Changed:** Added `GET /api/health` (health check, no auth), `DELETE /api/users/:id` (user deletion, `users:delete` permission), and `PATCH /api/admin/users/:id/status` (suspend/activate users, `users:write` permission). Removed `GET /api/admin/audit` endpoint. `adminListUsers` now accepts pagination parameters and returns `PaginatedAdminView`. `getAuditEntries` replaced by `updateUserStatus`. User objects now include `status` field.
@@ -34,6 +42,10 @@
 
 ## Authentication
 
+### 2026-03-07 — PR #9 by msiric
+**Changed:** Access token expiry changed from 15 minutes to 30 minutes. JWT payload now includes `tenantId`. `issueTokenPair` accepts new `tenantId` parameter. `moderator` role removed from role hierarchy. New permissions added: `tenant:admin`, `tenant:read`.
+**Why:** JWT payload extended to carry tenant context for tenant-scoped authorization. Moderator role removed as part of simplified RBAC model. Token expiry extended to reduce refresh frequency.
+
 ### 2026-03-05 — PR #5 by Mario Siric
 **Changed:** `src/auth/permissions.ts` renamed to `src/auth/rbac.ts`. Added `moderator` role to the role hierarchy (admin > moderator > member > viewer) with `users:suspend` permission. Added `users:delete` permission. Rate limiting re-added at application layer via `src/middleware/rate-limiter.ts` (previously removed in PR #3).
 **Why:** API v2 overhaul introduced the moderator role for user suspension workflows. The permissions file was renamed to `rbac.ts` to better reflect its purpose. Rate limiting was brought back to the application layer for per-endpoint control.
@@ -45,6 +57,22 @@
 ### 2026-03-04 — PR #1 by Mario Siric
 **Changed:** New rate limiting subsystem added via `src/auth/rate-limiter.ts` with `checkRateLimit()` function. Per-IP tracking with configurable per-endpoint limits.
 **Why:** No rate limiting existed previously. Added per-endpoint rate limits to protect against abuse, with `RateLimitError` thrown when limits are exceeded.
+
+---
+
+## File Index
+
+### 2026-03-07 — PR #9 by msiric
+**Changed:** `src/api/search.ts` renamed to `src/api/queries.ts`. `src/api/status.ts` deleted. `src/config/tenants.ts` added. File index updated to reflect current source files including `admin.ts`, `jwt-auth.ts`, and `rbac.ts`.
+**Why:** File reorganization as part of multi-tenant architecture. Search functionality moved to `queries.ts`. Status endpoint removed. Tenant configuration module added.
+
+---
+
+## UNMAPPED
+
+### 2026-03-07 — PR #9 by msiric
+**Changed:** New tenant isolation system introduced (`src/config/tenants.ts`, `resolveTenant`, tenant-scoped queries, `maxUsers` limits, feature flags). No existing doc section covers multi-tenancy.
+**Why:** Multi-tenant architecture is a new cross-cutting concern. Consider creating a dedicated "Multi-Tenancy" section in the architecture doc.
 
 ---
 
