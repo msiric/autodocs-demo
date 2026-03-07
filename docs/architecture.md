@@ -41,7 +41,7 @@ Returns an array of User objects with fields: `id`, `name`, `email`, `role`.
 
 ### 1.3 Create User
 
-`POST /api/users` — Creates a new user. Requires admin role. New users are assigned the `member` role by default.
+`POST /api/users` — Creates a new user. Requires admin role. New users are assigned the `viewer` role by default. User creation is tenant-scoped and enforces the tenant's `maxUsers` limit.
 
 **Implementation:** `src/api/users.ts` → `createUser()`
 
@@ -56,14 +56,14 @@ All endpoints require authentication via JWT Bearer token in the `Authorization`
 `src/auth/jwt-auth.ts` → `requireJWT(req, requiredRole?)`
 
 1. Extract JWT from `Authorization: Bearer <token>` header
-2. Verify and decode the JWT (access tokens expire after 15 minutes; refresh tokens after 7 days)
+2. Verify and decode the JWT (access tokens expire after 30 minutes; refresh tokens after 7 days). The JWT payload includes `userId`, `tenantId`, `role`, and `permissions`.
 3. If `requiredRole` is specified, check the token's role matches
 
 ### 2.2 RBAC Permissions
 
 `src/auth/rbac.ts` → `requirePermission(req, permission)`
 
-Role hierarchy: `admin` > `moderator` > `member` > `viewer`. Each role inherits permissions from lower roles. Permissions include `users:read`, `users:write`, `users:delete`, `users:suspend`, `admin:access`.
+Role hierarchy: `admin` > `member` > `viewer`. Each role inherits permissions from lower roles. Permissions include `users:read`, `users:write`, `users:delete`, `users:suspend`, `admin:access`, `tenant:admin`, `tenant:read`.
 
 ### 2.2 Error Cases
 
@@ -89,6 +89,7 @@ All errors are handled centrally by `categorizeError()` in `src/errors/handler.t
 | `ValidationError` | `VALIDATION` | 400 | Input validation failed (includes field-level violations) |
 | `RateLimitError` | `RATE_LIMITED` | 429 | Rate limit exceeded (includes `retryAfter` metadata) |
 | `ConflictError` | `CONFLICT` | 409 | Resource conflict |
+| `TenantError` | `TENANT_ERROR` | 403 | Tenant limit exceeded or tenant not found (includes `tenantId` and `limit` metadata) |
 | Unknown | `INTERNAL` | 500 | Unexpected server error |
 
 ### 3.2 ApiErrorEnvelope Structure
