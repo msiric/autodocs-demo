@@ -1,4 +1,5 @@
 import { AuthError, ForbiddenError } from '../errors/handler';
+import { logAuditEvent } from './audit';
 
 interface JWTPayload {
   userId: string;
@@ -49,7 +50,25 @@ export function requireJWT(req: Request, requiredRole?: string, requiredPermissi
     );
   }
 
+  logAuditEvent({
+    action: 'jwt.authenticate',
+    tenantId: payload.tenantId,
+    userId: payload.userId,
+    ip: req.headers.get('X-Forwarded-For') || 'unknown',
+  });
+
   return payload;
+}
+
+/**
+ * Determine authentication method from request headers.
+ * Supports both JWT (Authorization: Bearer) and API keys (X-API-Key).
+ * Returns 'jwt' | 'api_key' | null.
+ */
+export function detectAuthMethod(req: Request): 'jwt' | 'api_key' | null {
+  if (req.headers.get('Authorization')?.startsWith('Bearer ')) return 'jwt';
+  if (req.headers.get('X-API-Key')) return 'api_key';
+  return null;
 }
 
 /**
