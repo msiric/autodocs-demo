@@ -27,7 +27,7 @@ The API exposes three endpoints for user management:
 
 ### 1.1 List Users
 
-`GET /api/users` — Returns paginated users. Requires a valid authentication token. Responses are cached in-memory for 60 seconds per tenant/cursor/limit combination; a `CacheError` (503) is thrown if caching fails.
+`GET /api/users` — Returns paginated users. Supports dual authentication: JWT Bearer token or API key via `X-API-Key` header. When using an API key, the key must have `users:read` permission. Responses are cached in-memory for 60 seconds per tenant/cursor/limit combination; a `CacheError` (503) is thrown if caching fails.
 
 **Implementation:** `src/api/users.ts` → `listUsers()`
 
@@ -49,7 +49,7 @@ Returns a `CursorPaginatedResponse<User>` with fields: `data` (array of User obj
 
 ## 2. Authentication
 
-All endpoints require authentication via JWT Bearer token in the `Authorization` header (except `GET /api/health`).
+Endpoints support two authentication methods: JWT Bearer token in the `Authorization` header, or API key via the `X-API-Key` header. Some endpoints (e.g., `GET /api/users`) accept either method; admin-only endpoints require JWT. `GET /api/health` requires no authentication.
 
 ### 2.1 JWT Authentication
 
@@ -61,9 +61,35 @@ All endpoints require authentication via JWT Bearer token in the `Authorization`
 
 ### 2.2 RBAC Permissions
 
-`src/auth/rbac.ts` → `requirePermission(req, permission)`
+`src/auth/permissions.ts` → `requirePermission(req, permission)`
 
 Role hierarchy: `admin` > `member` > `viewer`. Each role inherits permissions from lower roles. Permissions include `users:read`, `users:write`, `users:delete`, `users:suspend`, `admin:access`, `tenant:admin`, `tenant:read`.
+
+### 2.3 API Key Authentication
+
+`src/auth/api-keys.ts` → `requireApiKey(req)`
+
+API keys are an alternative to JWT for service-to-service calls. Keys are passed via the `X-API-Key` header (not `Authorization`). Key format: `ak_live_<32-char-hex>` (production) or `ak_test_<32-char-hex>` (testing).
+
+Unlike JWT tokens, API keys:
+- Do not expire (must be manually revoked)
+- Are tied to a tenant, not a user
+- Have their own rate limit tier (`standard`, `elevated`, or `unlimited`)
+- Cannot access admin-level permissions (`admin:access`, `tenant:admin`, `users:delete`)
+
+Key management functions: `createApiKey()`, `revokeApiKey()`. All API key operations emit audit events.
+
+### 2.4 Auth Method Detection
+
+`src/auth/jwt-auth.ts` → `detectAuthMethod(req)`
+
+Returns `'jwt'` | `'api_key'` | `null` based on which authentication header is present. Used by endpoints that support dual auth.
+
+### 2.5 Audit Logging
+
+`src/auth/audit.ts` → `logAuditEvent(event)`
+
+All authentication events (JWT authentication, API key authentication, key creation, key revocation) are logged to an append-only audit trail. Events are buffered and flushed in batches (threshold: 50 events or 5-second interval). The `queryAuditLog()` function provides paginated access for the admin dashboard.
 
 ### 2.2 Error Cases
 
@@ -91,6 +117,7 @@ All errors are handled centrally by `categorizeError()` in `src/errors/handler.t
 | `ConflictError` | `CONFLICT` | 409 | Resource conflict |
 | `TenantError` | `TENANT_ERROR` | 403 | Tenant limit exceeded or tenant not found (includes `tenantId` and `limit` metadata) |
 | `CacheError` | `CACHE_ERROR` | 503 | Cache operation failed (includes `cacheKey` and `operation` metadata) |
+| `ApiKeyError` | `API_KEY_ERROR` | 403 | API key error (includes `keyPrefix` and `reason` metadata). Reasons: `expired`, `revoked`, `rate_limited`, `scope_exceeded` |
 | Unknown | `INTERNAL` | 500 | Unexpected server error |
 
 ### 3.2 ApiErrorEnvelope Structure
