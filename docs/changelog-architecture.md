@@ -1,30 +1,10 @@
 # architecture.md — Changelog
 
-## Error Handling
-
-### 2026-03-09 — PR #14 by msiric
-**Changed:** Added `CacheError` class to `src/errors/handler.ts`, mapping to code `CACHE_ERROR` with HTTP 503. Metadata includes `cacheKey` and `operation` (`'get'` | `'set'` | `'invalidate'`).
-**Why:** Response caching was added to user listings; `CacheError` provides structured error reporting when cache operations fail (e.g., when setting a cache entry in `listUsers()`).
-
-### 2026-03-07 — PR #9 by msiric
-**Changed:** Added `TenantError` class mapping to code `TENANT_ERROR` (HTTP 403) with `tenantId` and `limit` metadata.
-**Why:** Tenant user-limit enforcement needed a dedicated error type to distinguish tenant capacity issues from generic forbidden errors.
-
-### 2026-03-05 — PR #5 by Mario Siric
-**Changed:** `classifyError()` renamed to `categorizeError()`. Return type changed from `AppError` to `ApiErrorEnvelope` (the `AppError` class was removed). `RateLimitError` (429) re-added with `retryAfter` metadata. `ValidationError` now includes a field-level `violations` array instead of a single message.
-**Why:** API v2 overhaul introduced structured error envelopes (`ApiErrorEnvelope`) for consistent client-side error handling. Rate limiting was re-added at the application layer (via `src/middleware/rate-limiter.ts`). Validation errors were enhanced with per-field violation details.
-
-### 2026-03-05 — PR #3 by Mario Siric
-**Changed:** `handleError()` renamed to `classifyError()` (confirming PR #1 rename). Added `ForbiddenError` (403, `FORBIDDEN`) and `ConflictError` (409, `CONFLICT`) to the error classification. Removed `RateLimitError` (rate limiting moved to infrastructure). `AppError.metadata` field now used for structured error context (`requiredPermission`, `conflictField`).
-**Why:** Auth was migrated to JWT with RBAC. Role/permission violations now throw `ForbiddenError` instead of `AuthError`. Rate limiting was moved to infrastructure, so `RateLimitError` is no longer needed. `ConflictError` was added for resource conflict scenarios.
-
-### 2026-03-04 — PR #1 by Mario Siric
-**Changed:** `handleError()` renamed to `classifyError()`. Two new error types added: `RateLimitError` (429, `RATE_LIMITED`) and `ValidationError` (400, `VALIDATION`). `AppError` now includes an optional `metadata` field.
-**Why:** The error handling system was reclassified for clarity. Rate limiting and input validation were added as new features, requiring new error types to represent these failure modes.
-
----
-
 ## API Endpoints
+
+### 2026-03-10 — PR #1 by Mario Širić
+**Changed:** `listUsers()` now supports dual authentication (JWT Bearer or API key via `X-API-Key` header) using `detectAuthMethod()`. The endpoint table listed 3 endpoints but the source contains 5 — `updateUser()` (PATCH) and `deleteUser()` (DELETE) were undocumented.
+**Why:** API key authentication was added as an alternative to JWT for service-to-service calls. The dual-auth pattern allows both human users (JWT) and automated systems (API keys) to access the user listing endpoint.
 
 ### 2026-03-09 — PR #14 by msiric
 **Changed:** Added V2 user listing endpoint (`GET /api/v2/users`) with `listUsersV2()` in `src/api/v2/users.ts`. Added response caching (60s TTL) to `listUsers()` with `CacheError` on cache failure. Response format is `CursorPaginatedResponse<User>` with cursor pagination fields.
@@ -50,6 +30,10 @@
 
 ## Authentication
 
+### 2026-03-10 — PR #1 by Mario Širić
+**Changed:** `src/auth/rbac.ts` renamed to `src/auth/permissions.ts`. Added new files: `src/auth/api-keys.ts` (API key authentication with `requireApiKey`, `createApiKey`, `revokeApiKey`), `src/auth/audit.ts` (audit logging with `logAuditEvent`, `queryAuditLog`). Added `detectAuthMethod()` to `src/auth/jwt-auth.ts`. JWT authentication now emits audit events via `logAuditEvent()`. The section intro stating "all endpoints require JWT" is no longer accurate due to dual-auth support.
+**Why:** API key authentication was introduced for service-to-service calls that don't have a user context. Audit logging was added for security compliance — all authentication events are now tracked in an append-only audit trail.
+
 ### 2026-03-09 — PR #14 by msiric
 **Changed:** Added `apiVersion` field (`'v1'` | `'v2'`) to `JWTPayload` interface in `src/auth/jwt-auth.ts`.
 **Why:** V2 endpoints require a JWT with `apiVersion: 'v2'` to enforce version-specific access control. This allows the API to gate V2 features behind token versioning.
@@ -72,7 +56,47 @@
 
 ---
 
+## Error Handling
+
+### 2026-03-10 — PR #1 by Mario Širić
+**Changed:** Added `ApiKeyError` class to `src/errors/handler.ts`. It maps to code `API_KEY_ERROR`, HTTP 403, with metadata fields `keyPrefix` and `reason` (values: `expired`, `revoked`, `rate_limited`, `scope_exceeded`).
+**Why:** The new API key authentication system needed a dedicated error type to communicate structured failure reasons (e.g., revoked key vs. exceeded scope) distinct from generic auth errors.
+
+### 2026-03-09 — PR #14 by msiric
+**Changed:** Added `CacheError` class to `src/errors/handler.ts`, mapping to code `CACHE_ERROR` with HTTP 503. Metadata includes `cacheKey` and `operation` (`'get'` | `'set'` | `'invalidate'`).
+**Why:** Response caching was added to user listings; `CacheError` provides structured error reporting when cache operations fail (e.g., when setting a cache entry in `listUsers()`).
+
+### 2026-03-07 — PR #9 by msiric
+**Changed:** Added `TenantError` class mapping to code `TENANT_ERROR` (HTTP 403) with `tenantId` and `limit` metadata.
+**Why:** Tenant user-limit enforcement needed a dedicated error type to distinguish tenant capacity issues from generic forbidden errors.
+
+### 2026-03-05 — PR #5 by Mario Siric
+**Changed:** `classifyError()` renamed to `categorizeError()`. Return type changed from `AppError` to `ApiErrorEnvelope` (the `AppError` class was removed). `RateLimitError` (429) re-added with `retryAfter` metadata. `ValidationError` now includes a field-level `violations` array instead of a single message.
+**Why:** API v2 overhaul introduced structured error envelopes (`ApiErrorEnvelope`) for consistent client-side error handling. Rate limiting was re-added at the application layer (via `src/middleware/rate-limiter.ts`). Validation errors were enhanced with per-field violation details.
+
+### 2026-03-05 — PR #3 by Mario Siric
+**Changed:** `handleError()` renamed to `classifyError()` (confirming PR #1 rename). Added `ForbiddenError` (403, `FORBIDDEN`) and `ConflictError` (409, `CONFLICT`) to the error classification. Removed `RateLimitError` (rate limiting moved to infrastructure). `AppError.metadata` field now used for structured error context (`requiredPermission`, `conflictField`).
+**Why:** Auth was migrated to JWT with RBAC. Role/permission violations now throw `ForbiddenError` instead of `AuthError`. Rate limiting was moved to infrastructure, so `RateLimitError` is no longer needed. `ConflictError` was added for resource conflict scenarios.
+
+### 2026-03-04 — PR #1 by Mario Siric
+**Changed:** `handleError()` renamed to `classifyError()`. Two new error types added: `RateLimitError` (429, `RATE_LIMITED`) and `ValidationError` (400, `VALIDATION`). `AppError` now includes an optional `metadata` field.
+**Why:** The error handling system was reclassified for clarity. Rate limiting and input validation were added as new features, requiring new error types to represent these failure modes.
+
+---
+
+## Webhook Events
+
+### 2026-03-10 — PR #1 by Mario Širić
+**Changed:** Added three new webhook event types in `src/webhooks/dispatcher.ts`: `api_key.created`, `api_key.revoked`, `auth.failed`. The full event list is now: `user.created`, `user.updated`, `user.deleted`, `user.role_changed`, `api_key.created`, `api_key.revoked`, `auth.failed`. No "Webhook Events" section exists in the doc yet.
+**Why:** API key lifecycle events and authentication failures need to be observable by external systems for security monitoring and automation.
+
+---
+
 ## File Index
+
+### 2026-03-10 — PR #1 by Mario Širić
+**Changed:** `src/auth/rbac.ts` renamed to `src/auth/permissions.ts`. `src/auth/middleware.ts` reference is stale (replaced by `src/auth/jwt-auth.ts`). New files added: `src/auth/api-keys.ts`, `src/auth/audit.ts`. Missing entries: `src/auth/jwt-auth.ts`, `src/webhooks/dispatcher.ts`. `users.ts` now contains 5 endpoints (`listUsers`, `getUser`, `createUser`, `updateUser`, `deleteUser`). Error classes list should include `ApiKeyError`.
+**Why:** PR #1 added new authentication modules and renamed the RBAC file. The file index had not been updated to reflect the current source tree.
 
 ### 2026-03-07 — PR #9 by msiric
 **Changed:** `src/api/search.ts` renamed to `src/api/queries.ts`. `src/api/status.ts` deleted. `src/config/tenants.ts` added. File index updated to reflect current source files including `admin.ts`, `jwt-auth.ts`, and `rbac.ts`.
