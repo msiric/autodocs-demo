@@ -1,8 +1,10 @@
 import { categorizeError, ValidationError, TenantError, CacheError } from '../errors/handler';
-import { requireJWT } from '../auth/jwt-auth';
-import { requirePermission } from '../auth/rbac';
+import { requireJWT, detectAuthMethod } from '../auth/jwt-auth';
+import { requireApiKey, requireApiKeyPermission } from '../auth/api-keys';
+import { requirePermission } from '../auth/permissions';
 import { dispatchEvent } from '../webhooks/dispatcher';
 import { resolveTenant } from '../config/tenants';
+import { logAuditEvent } from '../auth/audit';
 
 const responseCache = new Map<string, { data: unknown; expires: number }>();
 const CACHE_TTL = 60_000; // 60 seconds
@@ -38,9 +40,18 @@ export async function listUsers(
   cursor?: string,
   limit: number = 20,
 ): Promise<CursorPaginatedResponse<User>> {
-  const caller = requireJWT(req);
-  requirePermission(req, 'users:read');
-  const tenant = resolveTenant(caller);
+  // Dual auth: accept either JWT or API key
+  const authMethod = detectAuthMethod(req);
+  let tenant;
+  if (authMethod === 'api_key') {
+    const key = requireApiKey(req);
+    requireApiKeyPermission(key, 'users:read');
+    tenant = { id: key.tenantId, maxUsers: Infinity };
+  } else {
+    const caller = requireJWT(req);
+    requirePermission(req, 'users:read');
+    tenant = resolveTenant(caller);
+  }
   try {
     if (limit > 100) throw new ValidationError('Limit cannot exceed 100');
 

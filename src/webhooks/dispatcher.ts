@@ -18,7 +18,8 @@ const registeredWebhooks: WebhookConfig[] = [];
 
 /**
  * Register a webhook endpoint for specific events.
- * Events: user.created, user.updated, user.deleted, user.role_changed
+ * Events: user.created, user.updated, user.deleted, user.role_changed,
+ *         api_key.created, api_key.revoked, auth.failed
  */
 export function registerWebhook(config: WebhookConfig): void {
   if (!config.url || !config.events.length) {

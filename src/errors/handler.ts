@@ -47,6 +47,12 @@ export function categorizeError(error: unknown, source: string, requestId?: stri
       operation: error.operation,
     });
   }
+  if (error instanceof ApiKeyError) {
+    return createEnvelope('API_KEY_ERROR', error.message, source, 403, traceId, {
+      keyPrefix: error.keyPrefix,
+      reason: error.reason,
+    });
+  }
   // Unknown errors get a generic 500 with sanitized message
   return createEnvelope('INTERNAL', 'An unexpected error occurred', source, 500, traceId);
 }
@@ -133,6 +139,15 @@ export class CacheError extends Error {
     message: string,
     public key: string,
     public operation: 'get' | 'set' | 'invalidate',
+  ) {
+    super(message);
+  }
+}
+export class ApiKeyError extends Error {
+  constructor(
+    message: string,
+    public keyPrefix: string,
+    public reason: 'expired' | 'revoked' | 'rate_limited' | 'scope_exceeded',
   ) {
     super(message);
   }
