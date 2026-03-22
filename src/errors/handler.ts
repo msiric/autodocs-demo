@@ -1,3 +1,5 @@
+import { CircuitOpenError } from './circuit-breaker';
+
 /**
  * Central error categorizer.
  * Categorizes errors by type and wraps them in a structured API error envelope.
@@ -51,6 +53,12 @@ export function categorizeError(error: unknown, source: string, requestId?: stri
     return createEnvelope('API_KEY_ERROR', error.message, source, 403, traceId, {
       keyPrefix: error.keyPrefix,
       reason: error.reason,
+    });
+  }
+  if (error instanceof CircuitOpenError) {
+    return createEnvelope('CIRCUIT_OPEN', error.message, source, 503, traceId, {
+      serviceName: error.serviceName,
+      retryAfterMs: error.retryAfterMs,
     });
   }
   // Unknown errors get a generic 500 with sanitized message
