@@ -36,10 +36,24 @@ interface CursorPaginatedResponse<T> {
  * GET /api/users
  * Returns paginated users. Requires 'users:read' permission.
  */
+export interface UserSearchFilters {
+  /** Filter by role (exact match) */
+  role?: 'admin' | 'member' | 'viewer';
+  /** Filter by status (exact match) */
+  status?: 'active' | 'suspended' | 'pending';
+  /** Search by name or email (case-insensitive substring) */
+  search?: string;
+  /** Sort field */
+  sortBy?: 'name' | 'email' | 'createdAt' | 'lastLoginAt';
+  /** Sort direction */
+  sortOrder?: 'asc' | 'desc';
+}
+
 export async function listUsers(
   req: Request,
   cursor?: string,
   limit: number = 20,
+  filters?: UserSearchFilters,
 ): Promise<CursorPaginatedResponse<User>> {
   // Dual auth: accept either JWT or API key
   const authMethod = detectAuthMethod(req);
@@ -65,10 +79,34 @@ export async function listUsers(
       return cached.data as CursorPaginatedResponse<User>;
     }
 
-    const query = cursor
-      ? 'SELECT * FROM users WHERE tenantId = ? AND id > ? ORDER BY id LIMIT ?'
-      : 'SELECT * FROM users WHERE tenantId = ? ORDER BY id LIMIT ?';
-    const params = cursor ? [tenant.id, cursor, limit + 1] : [tenant.id, limit + 1];
+    // Build query with optional filters
+    const conditions = ['tenantId = ?'];
+    const params: unknown[] = [tenant.id];
+    if (cursor) {
+      conditions.push('id > ?');
+      params.push(cursor);
+    }
+    if (filters?.role) {
+      conditions.push('role = ?');
+      params.push(filters.role);
+    }
+    if (filters?.status) {
+      conditions.push('status = ?');
+      params.push(filters.status);
+    }
+    if (filters?.search) {
+      conditions.push('(LOWER(name) LIKE ? OR LOWER(email) LIKE ?)');
+      const searchPattern = `%${filters.search.toLowerCase()}%`;
+      params.push(searchPattern, searchPattern);
+    }
+    const sortField = filters?.sortBy ?? 'id';
+    const sortDir = filters?.sortOrder ?? 'asc';
+    const validSortFields = ['id', 'name', 'email', 'createdAt', 'lastLoginAt'];
+    if (!validSortFields.includes(sortField)) {
+      throw new ValidationError(`Invalid sort field: ${sortField}`);
+    }
+    params.push(limit + 1);
+    const query = `SELECT * FROM users WHERE ${conditions.join(' AND ')} ORDER BY ${sortField} ${sortDir} LIMIT ?`;
     const users = await db.query(query, params);
     const hasMore = users.length > limit;
     const data = hasMore ? users.slice(0, limit) : users;
