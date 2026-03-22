@@ -11,19 +11,22 @@ This document covers the complete implementation of our REST API, from authentic
 1. [API Endpoints](#1-api-endpoints)
 2. [Authentication](#2-authentication)
 3. [Error Handling](#3-error-handling)
-4. [File Index](#4-file-index)
+4. [Webhook Events](#5-webhook-events)
+5. [File Index](#4-file-index)
 
 ---
 
 ## 1. API Endpoints
 
-The API exposes three endpoints for user management:
+The API exposes five endpoints for user management. All endpoints enforce per-endpoint rate limiting (see `src/api/rate-limiter.ts`).
 
 | Endpoint | Method | Auth Required | Description |
 |----------|--------|--------------|-------------|
-| `/api/users` | GET | Yes | List all users |
+| `/api/users` | GET | Yes (JWT or API key) | List all users |
 | `/api/users/:id` | GET | Yes | Get user by ID |
 | `/api/users` | POST | Admin only | Create new user |
+| `/api/users/:id` | PATCH | Yes (self or `users:write`) | Update user profile |
+| `/api/users/:id` | DELETE | Admin only | Soft-delete user (sets status to `suspended`) |
 
 ### 1.1 List Users
 
@@ -41,7 +44,7 @@ Returns a `CursorPaginatedResponse<User>` with fields: `data` (array of User obj
 
 ### 1.3 Create User
 
-`POST /api/users` — Creates a new user. Requires admin role. New users are assigned the `viewer` role by default. User creation is tenant-scoped and enforces the tenant's `maxUsers` limit.
+`POST /api/users` — Creates a new user. Requires admin role. Rate limited to 10 requests per 60 seconds per tenant. New users are assigned the `viewer` role by default. User creation is tenant-scoped and enforces the tenant's `maxUsers` limit.
 
 **Implementation:** `src/api/users.ts` → `createUser()`
 
@@ -101,6 +104,22 @@ All errors are returned as `ApiErrorEnvelope` with:
 - `source` — the function that threw the error
 - `statusCode` — HTTP status code
 - `metadata` — structured error context (e.g., `retryAfter` for rate limits, `violations` array for validation errors, `requiredPermission` for forbidden errors)
+
+---
+
+## 5. Webhook Events
+
+Webhook events are dispatched via `src/webhooks/dispatcher.ts` → `dispatchEvent()` when significant actions occur. The following event types are supported:
+
+| Event | Trigger |
+|-------|---------|
+| `user.created` | New user created via `POST /api/users` |
+| `user.updated` | User profile updated via `PATCH /api/users/:id` |
+| `user.deleted` | User soft-deleted via `DELETE /api/users/:id` |
+| `user.role_changed` | User role modified |
+| `api_key.created` | New API key issued |
+| `api_key.revoked` | API key revoked |
+| `auth.failed` | Authentication attempt failed |
 
 ---
 
