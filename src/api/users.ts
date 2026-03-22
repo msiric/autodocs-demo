@@ -5,6 +5,7 @@ import { requirePermission } from '../auth/permissions';
 import { dispatchEvent } from '../webhooks/dispatcher';
 import { resolveTenant } from '../config/tenants';
 import { logAuditEvent } from '../auth/audit';
+import { enforceRateLimit, getRateLimitStatus } from './rate-limiter';
 
 const responseCache = new Map<string, { data: unknown; expires: number }>();
 const CACHE_TTL = 60_000; // 60 seconds
@@ -47,10 +48,12 @@ export async function listUsers(
     const key = requireApiKey(req);
     requireApiKeyPermission(key, 'users:read');
     tenant = { id: key.tenantId, maxUsers: Infinity };
+    enforceRateLimit(req, 'GET /api/users', key.tenantId);
   } else {
     const caller = requireJWT(req);
     requirePermission(req, 'users:read');
     tenant = resolveTenant(caller);
+    enforceRateLimit(req, 'GET /api/users', tenant.id);
   }
   try {
     if (limit > 100) throw new ValidationError('Limit cannot exceed 100');
@@ -110,6 +113,7 @@ export async function createUser(req: Request, data: Partial<User>): Promise<Use
   const caller = requireJWT(req, 'admin');
   requirePermission(req, 'users:write');
   const tenant = resolveTenant(caller);
+  enforceRateLimit(req, 'POST /api/users', tenant.id);
   try {
     if (!data.email) throw new ValidationError('Email is required');
     if (!data.name) throw new ValidationError('Name is required');
