@@ -91,6 +91,8 @@ All errors are handled centrally by `categorizeError()` in `src/errors/handler.t
 | `ConflictError` | `CONFLICT` | 409 | Resource conflict |
 | `TenantError` | `TENANT_ERROR` | 403 | Tenant limit exceeded or tenant not found (includes `tenantId` and `limit` metadata) |
 | `CacheError` | `CACHE_ERROR` | 503 | Cache operation failed (includes `cacheKey` and `operation` metadata) |
+| `ApiKeyError` | `API_KEY_ERROR` | 403 | API key authentication failed (includes `keyPrefix` and `reason` metadata; reason is one of `expired`, `revoked`, `rate_limited`, `scope_exceeded`) |
+| `CircuitOpenError` | `CIRCUIT_OPEN` | 503 | Circuit breaker is open for an external service (includes `serviceName` and `retryAfterMs` metadata) |
 | Unknown | `INTERNAL` | 500 | Unexpected server error |
 
 ### 3.2 ApiErrorEnvelope Structure
@@ -99,8 +101,10 @@ All errors are returned as `ApiErrorEnvelope` with:
 - `code` — machine-readable error code
 - `message` — human-readable description
 - `source` — the function that threw the error
+- `traceId` — unique request trace ID for debugging (format: `trace-<timestamp>-<random>`)
+- `timestamp` — ISO 8601 timestamp of when the error occurred
 - `statusCode` — HTTP status code
-- `metadata` — structured error context (e.g., `retryAfter` for rate limits, `violations` array for validation errors, `requiredPermission` for forbidden errors)
+- `metadata` — structured error context (e.g., `retryAfter` for rate limits, `violations` array for validation errors, `requiredPermission` for forbidden errors, `serviceName` and `retryAfterMs` for circuit breaker errors)
 
 ---
 
