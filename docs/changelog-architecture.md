@@ -2,6 +2,10 @@
 
 ## Error Handling
 
+### 2026-03-23 — PR #7 by msiric
+**Changed:** Added `CircuitOpenError` error type, categorized as `CIRCUIT_OPEN` (503) with `serviceName` and `retryAfterMs` metadata. Circuit breaker implementation in `src/errors/circuit-breaker.ts` with three states (CLOSED/OPEN/HALF_OPEN), configurable thresholds, and per-service tracking.
+**Why:** Circuit breaker pattern prevents cascading failures when external services (database, cache, webhook) are unavailable, with automatic recovery testing.
+
 ### 2026-03-09 — PR #14 by msiric
 **Changed:** Added `CacheError` class to `src/errors/handler.ts`, mapping to code `CACHE_ERROR` with HTTP 503. Metadata includes `cacheKey` and `operation` (`'get'` | `'set'` | `'invalidate'`).
 **Why:** Response caching was added to user listings; `CacheError` provides structured error reporting when cache operations fail (e.g., when setting a cache entry in `listUsers()`).
@@ -74,6 +78,10 @@
 
 ## File Index
 
+### 2026-03-23 — PR #1, #3, #7, #9 by msiric
+**Changed:** `src/auth/middleware.ts` was renamed to `src/auth/permissions.ts` (PR #1). New files added: `src/auth/api-keys.ts`, `src/auth/audit.ts` (PR #1), `src/api/rate-limiter.ts` (PR #3), `src/errors/circuit-breaker.ts` (PR #7), `src/api/health.ts` (PR #9). Files `src/auth/jwt-auth.ts` and `src/webhooks/dispatcher.ts` existed but were not in the index.
+**Why:** Multiple feature PRs added new source files and renamed existing ones. The file index referenced the deleted `middleware.ts` path.
+
 ### 2026-03-07 — PR #9 by msiric
 **Changed:** `src/api/search.ts` renamed to `src/api/queries.ts`. `src/api/status.ts` deleted. `src/config/tenants.ts` added. File index updated to reflect current source files including `admin.ts`, `jwt-auth.ts`, and `rbac.ts`.
 **Why:** File reorganization as part of multi-tenant architecture. Search functionality moved to `queries.ts`. Status endpoint removed. Tenant configuration module added.
@@ -81,6 +89,10 @@
 ---
 
 ## UNMAPPED
+
+### 2026-03-23 — PR #1 by msiric
+**Changed:** Added audit logging system (`src/auth/audit.ts`) with buffered writes, structured JSON output, and queryable audit trail. No existing doc section covers this.
+**Why:** PR added audit logging for all security-sensitive operations (auth events, key lifecycle, permission checks) to support compliance and debugging needs.
 
 ### 2026-03-07 — PR #9 by msiric
 **Changed:** New tenant isolation system introduced (`src/config/tenants.ts`, `resolveTenant`, tenant-scoped queries, `maxUsers` limits, feature flags). No existing doc section covers multi-tenancy.
@@ -97,5 +109,13 @@
 ### 2026-03-05 — PR #3 by Mario Siric
 **Changed:** New audit logging subsystem added via `src/audit/logger.ts`. Functions: `logAuditEvent()` records admin actions with userId, action, target, details, outcome, and IP. `getAuditLog()` retrieves entries with optional filters. New admin endpoint `GET /api/admin/audit` exposes the audit log. New files: `src/api/admin.ts`, `src/audit/logger.ts`, `src/auth/permissions.ts`, `src/auth/jwt-auth.ts`.
 **Why:** Audit logging was added for compliance. All admin actions are logged with full context (who, what, when, outcome, IP) to provide an audit trail.
+
+---
+
+## Webhook Events
+
+### 2026-03-23 — PR #1 by msiric
+**Changed:** Extended webhook events to include `api_key.created`, `api_key.revoked`, and `auth.failed` events alongside existing user lifecycle events. Webhook system (`src/webhooks/dispatcher.ts`) supports HMAC-SHA256 signed payloads with 3-retry exponential backoff.
+**Why:** API key lifecycle events enable webhook consumers to track key creation and revocation for security monitoring and compliance.
 
 ---
