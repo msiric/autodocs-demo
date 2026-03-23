@@ -2,6 +2,10 @@
 
 ## Error Handling
 
+### 2026-03-23 — PR #7 by msiric
+**Changed:** Added `CircuitOpenError` (`CIRCUIT_OPEN`, 503) with `serviceName` and `retryAfterMs` metadata. Handled by `categorizeError()` in `src/errors/handler.ts`.
+**Why:** Circuit breaker pattern prevents cascading failures when external services are down. The error includes retry timing so clients know when to attempt again.
+
 ### 2026-03-09 — PR #14 by msiric
 **Changed:** Added `CacheError` class to `src/errors/handler.ts`, mapping to code `CACHE_ERROR` with HTTP 503. Metadata includes `cacheKey` and `operation` (`'get'` | `'set'` | `'invalidate'`).
 **Why:** Response caching was added to user listings; `CacheError` provides structured error reporting when cache operations fail (e.g., when setting a cache entry in `listUsers()`).
@@ -97,5 +101,13 @@
 ### 2026-03-05 — PR #3 by Mario Siric
 **Changed:** New audit logging subsystem added via `src/audit/logger.ts`. Functions: `logAuditEvent()` records admin actions with userId, action, target, details, outcome, and IP. `getAuditLog()` retrieves entries with optional filters. New admin endpoint `GET /api/admin/audit` exposes the audit log. New files: `src/api/admin.ts`, `src/audit/logger.ts`, `src/auth/permissions.ts`, `src/auth/jwt-auth.ts`.
 **Why:** Audit logging was added for compliance. All admin actions are logged with full context (who, what, when, outcome, IP) to provide an audit trail.
+
+---
+
+## Webhook Events
+
+### 2026-03-23 — PR #1 by msiric
+**Changed:** Extended webhook events to include `api_key.created`, `api_key.revoked`, and `auth.failed` alongside existing user lifecycle events (`user.created`, `user.updated`, `user.deleted`, `user.role_changed`).
+**Why:** API key lifecycle events enable external systems to react to key provisioning and revocation for security monitoring.
 
 ---
