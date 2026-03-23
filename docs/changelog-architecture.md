@@ -2,6 +2,12 @@
 
 ## Error Handling
 
+### 2026-03-23 — PR #7 by msiric
+**Changed:** Added `CircuitOpenError` (`CIRCUIT_OPEN`, 503) to error classification with `serviceName` and `retryAfterMs` metadata.
+**Why:** Circuit breaker pattern added for external service calls — when the circuit opens, requests fail fast with a 503 and retry-after hint instead of waiting for timeouts.
+
+
+
 ### 2026-03-09 — PR #14 by msiric
 **Changed:** Added `CacheError` class to `src/errors/handler.ts`, mapping to code `CACHE_ERROR` with HTTP 503. Metadata includes `cacheKey` and `operation` (`'get'` | `'set'` | `'invalidate'`).
 **Why:** Response caching was added to user listings; `CacheError` provides structured error reporting when cache operations fail (e.g., when setting a cache entry in `listUsers()`).
@@ -22,9 +28,13 @@
 **Changed:** `handleError()` renamed to `classifyError()`. Two new error types added: `RateLimitError` (429, `RATE_LIMITED`) and `ValidationError` (400, `VALIDATION`). `AppError` now includes an optional `metadata` field.
 **Why:** The error handling system was reclassified for clarity. Rate limiting and input validation were added as new features, requiring new error types to represent these failure modes.
 
+
+
 ---
 
 ## API Endpoints
+
+
 
 ### 2026-03-09 — PR #14 by msiric
 **Changed:** Added V2 user listing endpoint (`GET /api/v2/users`) with `listUsersV2()` in `src/api/v2/users.ts`. Added response caching (60s TTL) to `listUsers()` with `CacheError` on cache failure. Response format is `CursorPaginatedResponse<User>` with cursor pagination fields.
@@ -46,9 +56,13 @@
 **Changed:** Rate limiting documented for all three endpoints (GET /api/users: 100/min, GET /api/users/:id: 200/min, POST /api/users: 10/min). Input validation added: user ID format check on getUser, email required on createUser.
 **Why:** Rate limiting was missing entirely from the API. Input validation did not exist for user IDs or required fields. Both were added to harden the API against abuse and malformed requests.
 
+
+
 ---
 
 ## Authentication
+
+
 
 ### 2026-03-09 — PR #14 by msiric
 **Changed:** Added `apiVersion` field (`'v1'` | `'v2'`) to `JWTPayload` interface in `src/auth/jwt-auth.ts`.
@@ -70,25 +84,41 @@
 **Changed:** New rate limiting subsystem added via `src/auth/rate-limiter.ts` with `checkRateLimit()` function. Per-IP tracking with configurable per-endpoint limits.
 **Why:** No rate limiting existed previously. Added per-endpoint rate limits to protect against abuse, with `RateLimitError` thrown when limits are exceeded.
 
+
+
 ---
 
 ## File Index
+
+### 2026-03-23 — PR #1, #3, #5, #7, #9 by msiric
+**Changed:** Complete rewrite of file index. Removed stale `src/auth/middleware.ts` entry. Added `src/api/health.ts`, `src/api/rate-limiter.ts`, `src/errors/circuit-breaker.ts`, `src/auth/api-keys.ts`, `src/auth/permissions.ts` (renamed from `rbac.ts`), `src/auth/audit.ts`, `src/webhooks/dispatcher.ts`. Updated `src/api/users.ts` exports to include `updateUser` and `deleteUser`.
+**Why:** Multiple PRs added new source files and renamed existing ones. The previous file index referenced a non-existent `src/auth/middleware.ts` and was missing all files added since the initial documentation.
+
+
 
 ### 2026-03-07 — PR #9 by msiric
 **Changed:** `src/api/search.ts` renamed to `src/api/queries.ts`. `src/api/status.ts` deleted. `src/config/tenants.ts` added. File index updated to reflect current source files including `admin.ts`, `jwt-auth.ts`, and `rbac.ts`.
 **Why:** File reorganization as part of multi-tenant architecture. Search functionality moved to `queries.ts`. Status endpoint removed. Tenant configuration module added.
 
+
+
 ---
 
 ## UNMAPPED
+
+
 
 ### 2026-03-07 — PR #9 by msiric
 **Changed:** New tenant isolation system introduced (`src/config/tenants.ts`, `resolveTenant`, tenant-scoped queries, `maxUsers` limits, feature flags). No existing doc section covers multi-tenancy.
 **Why:** Multi-tenant architecture is a new cross-cutting concern. Consider creating a dedicated "Multi-Tenancy" section in the architecture doc.
 
+
+
 ---
 
 ## Audit Logging
+
+
 
 ### 2026-03-05 — PR #5 by Mario Siric
 **Changed:** Deleted `src/audit/logger.ts`. Removed `getAuditEntries` admin endpoint. Audit events now emitted via inline `console.log` with JSON-structured output (event, actor, outcome, IP, timestamp) instead of a dedicated logging subsystem.
@@ -97,5 +127,13 @@
 ### 2026-03-05 — PR #3 by Mario Siric
 **Changed:** New audit logging subsystem added via `src/audit/logger.ts`. Functions: `logAuditEvent()` records admin actions with userId, action, target, details, outcome, and IP. `getAuditLog()` retrieves entries with optional filters. New admin endpoint `GET /api/admin/audit` exposes the audit log. New files: `src/api/admin.ts`, `src/audit/logger.ts`, `src/auth/permissions.ts`, `src/auth/jwt-auth.ts`.
 **Why:** Audit logging was added for compliance. All admin actions are logged with full context (who, what, when, outcome, IP) to provide an audit trail.
+
+---
+
+## Webhook Events
+
+### 2026-03-23 — PR #1 by msiric
+**Changed:** Added webhook events for API key lifecycle (`api_key.created`, `api_key.revoked`) and authentication failures (`auth.failed`). Section was entirely missing from documentation.
+**Why:** API key management operations need to be observable via webhooks for security monitoring and integration with external systems.
 
 ---

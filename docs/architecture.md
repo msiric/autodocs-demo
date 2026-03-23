@@ -11,7 +11,8 @@ This document covers the complete implementation of our REST API, from authentic
 1. [API Endpoints](#1-api-endpoints)
 2. [Authentication](#2-authentication)
 3. [Error Handling](#3-error-handling)
-4. [File Index](#4-file-index)
+4. [Webhook Events](#4-webhook-events)
+5. [File Index](#5-file-index)
 
 ---
 
@@ -101,6 +102,40 @@ All errors are returned as `ApiErrorEnvelope` with:
 - `source` — the function that threw the error
 - `statusCode` — HTTP status code
 - `metadata` — structured error context (e.g., `retryAfter` for rate limits, `violations` array for validation errors, `requiredPermission` for forbidden errors)
+
+---
+
+## 4. Webhook Events
+
+Webhook events allow external systems to subscribe to API lifecycle events. Delivery is asynchronous and non-blocking.
+
+**Implementation:** `src/webhooks/dispatcher.ts` → `registerWebhook()`, `dispatchEvent()`
+
+### 4.1 Supported Events
+
+| Event | Trigger |
+|-------|---------|
+| `user.created` | A new user is created |
+| `user.updated` | A user is updated |
+| `user.deleted` | A user is deleted |
+| `user.role_changed` | A user's role is changed |
+| `api_key.created` | A new API key is created |
+| `api_key.revoked` | An API key is revoked |
+| `auth.failed` | An authentication attempt fails |
+
+### 4.2 Webhook Configuration
+
+Register a webhook with `registerWebhook(config)` where config includes:
+- `url` — delivery endpoint (required)
+- `events` — array of event names to subscribe to (at least one required)
+- `secret` — shared secret for HMAC-SHA256 signature verification
+- `active` — whether the webhook is currently enabled
+
+### 4.3 Delivery
+
+Each delivery sends a JSON payload with `event`, `timestamp`, `data`, and `signature` fields. The signature is sent via the `X-Webhook-Signature` header.
+
+Failed deliveries are retried up to 3 attempts with exponential backoff (5s, 25s). Failures after all retries are logged but do not throw errors.
 
 ---
 
